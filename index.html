@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>EC Destaque Barbershop - Agendamento</title>
+
+    <!-- Ícone da aba -->
+    <link rel="icon" type="image/jpeg" href="img/logo.jpeg">
+
+    <!-- Dependências (mesmo padrão dos projetos agenda-lash e House of Beauty) -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --preto: #0b0b0d;
+            --preto2: #141418;
+            --ouro: #d4af37;
+            --ouro-claro: #f4d679;
+            --ouro-escuro: #a67c1a;
+            --prata: #c7ccd1;
+            --prata-escuro: #8a9099;
+        }
+        body {
+            font-family: 'Poppins', sans-serif;
+            margin: 0; padding: 0;
+            color: #e8e6e1;
+            background-color: var(--preto);
+            background-image:
+                radial-gradient(circle at 20% 15%, rgba(212,175,55,0.08), transparent 40%),
+                radial-gradient(circle at 85% 85%, rgba(199,204,209,0.06), transparent 42%),
+                linear-gradient(160deg, #0b0b0d 0%, #141418 60%, #0b0b0d 100%);
+            background-attachment: fixed;
+        }
+        .serif { font-family: 'Cinzel', serif; }
+
+        /* Texto em degradê dourado */
+        .text-gold {
+            background: linear-gradient(180deg, #f4d679 0%, #d4af37 45%, #a67c1a 100%);
+            -webkit-background-clip: text; background-clip: text;
+            -webkit-text-fill-color: transparent; color: transparent;
+        }
+        .text-silver {
+            background: linear-gradient(180deg, #ffffff 0%, #c7ccd1 45%, #8a9099 100%);
+            -webkit-background-clip: text; background-clip: text;
+            -webkit-text-fill-color: transparent; color: transparent;
+        }
+
+        .border-gold { border-color: rgba(212,175,55,0.35); }
+        .card {
+            background: linear-gradient(160deg, rgba(26,26,30,0.95), rgba(15,15,18,0.95));
+            border: 1px solid rgba(212,175,55,0.22);
+            box-shadow: 0 10px 30px -12px rgba(0,0,0,0.8);
+        }
+        .card-hover { transition: all .25s ease; }
+        .card-hover:hover {
+            transform: translateY(-3px);
+            border-color: rgba(212,175,55,0.6);
+            box-shadow: 0 16px 34px -12px rgba(212,175,55,0.25);
+        }
+
+        .btn-gold {
+            background: linear-gradient(180deg, #f4d679 0%, #d4af37 48%, #a67c1a 100%);
+            color: #1a1407; font-weight: 700;
+            box-shadow: 0 8px 22px -8px rgba(212,175,55,0.6);
+        }
+        .btn-gold:hover { filter: brightness(1.07); }
+
+        .divider {
+            height: 1px; width: 100%;
+            background: linear-gradient(90deg, transparent, rgba(212,175,55,0.5), transparent);
+        }
+
+        .fade-in { animation: fadeIn .5s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        .loader { border: 3px solid rgba(255,255,255,0.1); border-top: 3px solid var(--ouro); border-radius: 50%; width: 22px; height: 22px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        input[type="date"] {
+            -webkit-appearance: none; display: block; width: 100%; height: 52px; padding: 10px 12px;
+            background: #1a1a1e !important; border: 1px solid rgba(212,175,55,0.3); border-radius: 0.75rem;
+            font-size: 16px; color: #e8e6e1;
+        }
+        input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.8) sepia(1) saturate(4) hue-rotate(5deg); cursor: pointer; }
+        input::placeholder { color: #6b6b73; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body>
+
+    <div id="root">
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;">
+            <h2 class="serif" style="color:#d4af37;letter-spacing:3px;">EC DESTAQUE</h2>
+            <div class="loader" style="margin-top:15px;"></div>
+        </div>
+    </div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // =====================================================================
+        // 1. CONFIG DA BARBEARIA
+        // =====================================================================
+        const BARBEARIA = {
+            nome: "EC Destaque Barbershop",
+            instagram: "@ec_cortes",
+            instagramUrl: "https://www.instagram.com/ec_cortes/",
+            // Troque pelo WhatsApp real da barbearia (formato: 55 + DDD + número)
+            whatsapp: "5511000000000",
+            // Quando o Google Apps Script estiver pronto, cole a URL aqui.
+            // Vazio => modo POC (horários simulados, nada bloqueado).
+            scriptGoogleUrl: "",
+            endereco: "", // ex: "Rua Exemplo, 123 - Bairro, Cidade"
+        };
+
+        // Horário de funcionamento por dia da semana (0=Dom ... 6=Sáb) => [horaInicio, horaFim]
+        // Ajuste conforme a rotina da barbearia.
+        const HORARIO = {
+            1: [9, 20],   // Segunda
+            2: [9, 20],   // Terça
+            3: [9, 20],   // Quarta
+            4: [9, 20],   // Quinta
+            5: [9, 21],   // Sexta
+            6: [9, 18],   // Sábado
+            // Domingo (0) fechado
+        };
+
+        // =====================================================================
+        // 2. SERVIÇOS (preços de referência — fáceis de editar)
+        // =====================================================================
+        const SERVICOS = [
+            { id: "corte", nome: "Corte na Máquina / Tesoura", desc: "Corte masculino com acabamento profissional.", preco: 40, duracao: 0.5, emoji: "✂️" },
+            { id: "corte-degrade", nome: "Corte Degradê (Fade)", desc: "Degradê bem construído, linhas limpas e transição suave.", preco: 45, duracao: 0.5, emoji: "💈" },
+            { id: "corte-barba", nome: "Corte + Barba", desc: "Combo completo: corte e barba desenhada na navalha.", preco: 65, duracao: 1, emoji: "🧔" },
+            { id: "barba", nome: "Barba Desenhada", desc: "Modelagem com navalha, toalha quente e finalização.", preco: 30, duracao: 0.5, emoji: "🪒" },
+            { id: "sobrancelha", nome: "Sobrancelha", desc: "Design na navalha para realçar o olhar.", preco: 15, duracao: 0.5, emoji: "👁️" },
+            { id: "corte-barba-sobrancelha", nome: "Corte + Barba + Sobrancelha", desc: "O pacote completo do destaque.", preco: 75, duracao: 1, emoji: "👑" },
+            { id: "pezinho", nome: "Pezinho / Acabamento", desc: "Retoque rápido do contorno entre os cortes.", preco: 20, duracao: 0.5, emoji: "💈" },
+            { id: "platinado", nome: "Platinado / Descoloração", desc: "Global ou nas pontas. Valor pode variar na avaliação.", preco: 120, aPartirDe: true, duracao: 2, emoji: "⚡" },
+        ];
+
+        // =====================================================================
+        // 3. FUNÇÕES GLOBAIS
+        // =====================================================================
+        const formatarTelefone = (value) => {
+            if (!value) return "";
+            const n = value.replace(/\D/g, "");
+            if (n.length <= 11) return n.replace(/^(\d{2})(\d{0,5})(\d{0,4}).*/, "($1) $2-$3").replace(/-$/, "");
+            return n.substring(0, 11).replace(/^(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
+        };
+
+        const gerarLinkWhatsApp = (numeroBruto, mensagem) => {
+            let zap = String(numeroBruto || "").replace(/\D/g, "");
+            if (zap.length < 10) return null;
+            if (!zap.startsWith("55")) zap = "55" + zap;
+            return `https://wa.me/${zap}?text=${encodeURIComponent(mensagem)}`;
+        };
+
+        const formatarDuracao = (h) => {
+            if (h === null || h === undefined) return "a combinar";
+            if (h === 0.5) return "30min";
+            if (h === 1.5) return "1h30";
+            if (h === 2.5) return "2h30";
+            return `${h}h`;
+        };
+
+        const formatarPreco = (s) => {
+            const valor = Number(s.preco).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            return `${s.aPartirDe ? "A partir de " : ""}R$ ${valor}`;
+        };
+
+        // Gera horários de 30 em 30 min conforme o dia da semana
+        const gerarHorarios = (dateStr) => {
+            if (!dateStr) return [];
+            const dia = new Date(dateStr + "T12:00:00").getDay();
+            const faixa = HORARIO[dia];
+            if (!faixa) return [];
+            const [ini, fim] = faixa;
+            const lista = [];
+            let min = Math.round(ini * 60);
+            const minFim = Math.round(fim * 60);
+            while (min < minFim) {
+                const h = Math.floor(min / 60);
+                const m = min % 60;
+                lista.push(`${h < 10 ? "0" + h : h}:${m === 0 ? "00" : m}`);
+                min += 30;
+            }
+            return lista;
+        };
+
+        const salvarAgendamento = async (payload) => {
+            const url = BARBEARIA.scriptGoogleUrl;
+            if (!url) { console.log("[MOCK] Agendamento salvo:", payload); return true; }
+            try {
+                await fetch(url, {
+                    method: "POST", mode: "no-cors",
+                    headers: { "Content-Type": "text/plain" },
+                    body: JSON.stringify(payload),
+                });
+                return true;
+            } catch (e) { console.error(e); return true; }
+        };
+
+        // Busca na agenda real os slots ocupados. Sem script => modo mock (tudo livre).
+        const buscarHorariosOcupados = async (dateStr, slots) => {
+            const url = BARBEARIA.scriptGoogleUrl;
+            if (!url) return { ok: true, mock: true, ocupados: [] };
+            try {
+                const resp = await fetch(`${url}?action=get_agenda&date=${dateStr}`, { method: "GET", redirect: "follow" });
+                const texto = await resp.text();
+                let eventos = [];
+                try { eventos = JSON.parse(texto); } catch (e) { return { ok: false, ocupados: [] }; }
+                const ocupados = [];
+                if (Array.isArray(eventos)) {
+                    eventos.forEach((ev) => {
+                        if (ev.isAllDay) {
+                            slots.forEach((h) => { if (!ocupados.includes(h)) ocupados.push(h); });
+                        } else {
+                            slots.forEach((slot) => {
+                                const [sh, sm] = slot.split(":").map(Number);
+                                const ini = sh * 60 + sm;
+                                const fim = ini + 30;
+                                const evIni = ev.startHour * 60 + ev.startMin;
+                                const evFim = ev.endHour * 60 + ev.endMin;
+                                if (ini < evFim && fim > evIni && !ocupados.includes(slot)) ocupados.push(slot);
+                            });
+                        }
+                    });
+                }
+                return { ok: true, ocupados };
+            } catch (e) { console.error("Erro ao ler agenda:", e); return { ok: false, ocupados: [] }; }
+        };
+
+        // =====================================================================
+        // 4. ÍCONES
+        // =====================================================================
+        const Icons = {
+            Whatsapp: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>,
+            Instagram: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg>,
+            Clock: () => <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>,
+            Back: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>,
+            MapPin: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>,
+        };
+
+        // Poste de barbeiro estilizado (SVG) para decorar
+        const BarberPole = () => (
+            <svg width="22" height="46" viewBox="0 0 22 46" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="6" y="6" width="10" height="34" rx="5" fill="#f5f5f5" stroke="#d4af37" strokeWidth="1.2"/>
+                <path d="M6 12 L16 8 M6 18 L16 14 M6 24 L16 20 M6 30 L16 26 M6 36 L16 32" stroke="#c0392b" strokeWidth="2"/>
+                <path d="M6 15 L16 11 M6 21 L16 17 M6 27 L16 23 M6 33 L16 29" stroke="#2c5fa8" strokeWidth="2"/>
+                <rect x="4" y="2" width="14" height="5" rx="2.5" fill="#d4af37"/>
+                <rect x="4" y="39" width="14" height="5" rx="2.5" fill="#d4af37"/>
+            </svg>
+        );
+
+        // =====================================================================
+        // 5. CABEÇALHO COM O LOGO
+        // =====================================================================
+        function Cabecalho() {
+            return (
+                <div className="w-full max-w-md mx-auto text-center pt-2 pb-5">
+                    <img src="img/logo.jpeg" alt="EC Destaque Barbershop"
+                         className="w-36 h-36 mx-auto rounded-full object-cover shadow-2xl"
+                         style={{ border: "2px solid rgba(212,175,55,0.6)", boxShadow: "0 0 40px -8px rgba(212,175,55,0.45)" }}
+                         onError={(e) => { e.target.style.display = "none"; }} />
+                    <h1 className="serif text-2xl font-bold mt-4 tracking-wider">
+                        <span className="text-gold">EC</span> <span className="text-silver">DESTAQUE</span>
+                    </h1>
+                    <p className="serif text-xs tracking-[0.35em] text-gold mt-1">BARBERSHOP</p>
+                    <a href={BARBEARIA.instagramUrl} target="_blank" rel="noopener noreferrer"
+                       className="inline-flex items-center gap-1.5 text-xs text-neutral-400 mt-3 hover:text-amber-300 transition-colors">
+                        <Icons.Instagram /> {BARBEARIA.instagram}
+                    </a>
+                </div>
+            );
+        }
+
+        // =====================================================================
+        // 6. HOME — LISTA DE SERVIÇOS
+        // =====================================================================
+        function TelaServicos({ aoEscolher }) {
+            return (
+                <div className="w-full max-w-md mx-auto fade-in">
+                    <div className="text-center mb-5">
+                        <p className="text-[11px] uppercase tracking-[0.3em] text-gold font-semibold">Agende seu horário</p>
+                        <h2 className="serif text-xl text-neutral-100 mt-1">Nossos Serviços</h2>
+                        <div className="divider mt-3"></div>
+                    </div>
+
+                    <div className="space-y-2.5">
+                        {SERVICOS.map((s) => (
+                            <button key={s.id} onClick={() => aoEscolher(s)}
+                                className="w-full card card-hover rounded-xl p-4 flex items-center gap-3 text-left">
+                                <div className="w-11 h-11 shrink-0 rounded-lg flex items-center justify-center text-xl"
+                                     style={{ background: "rgba(212,175,55,0.08)", border: "1px solid rgba(212,175,55,0.25)" }}>
+                                    {s.emoji}
+                                </div>
+                                <div className="flex-1">
+                                    <span className="font-semibold text-neutral-100 block text-sm">{s.nome}</span>
+                                    <span className="text-[11px] text-neutral-400 block mt-0.5 leading-snug">{s.desc}</span>
+                                    <span className="text-[11px] text-neutral-500 flex items-center gap-1 mt-1"><Icons.Clock /> {formatarDuracao(s.duracao)}</span>
+                                </div>
+                                <span className="text-gold font-bold text-sm text-right shrink-0 serif">{formatarPreco(s)}</span>
+                            </button>
+                        ))}
+                    </div>
+
+                    {BARBEARIA.endereco && (
+                        <p className="text-xs text-neutral-500 flex items-center justify-center gap-1.5 mt-5">
+                            <Icons.MapPin /> {BARBEARIA.endereco}
+                        </p>
+                    )}
+                </div>
+            );
+        }
+
+        // =====================================================================
+        // 7. AGENDAMENTO (data/hora + dados)
+        // =====================================================================
+        function TelaAgendamento({ servico, aoVoltar, aoFinalizar }) {
+            const hoje = new Date().toISOString().split("T")[0];
+            const [nome, setNome] = useState("");
+            const [whatsapp, setWhatsapp] = useState("");
+            const [data, setData] = useState("");
+            const [hora, setHora] = useState("");
+            const [loading, setLoading] = useState(false);
+
+            const [horariosDisponiveis, setHorariosDisponiveis] = useState([]);
+            const [ocupados, setOcupados] = useState([]);
+            const [carregandoAgenda, setCarregandoAgenda] = useState(false);
+            const [erroAgenda, setErroAgenda] = useState(false);
+            const [ehMock, setEhMock] = useState(false);
+
+            const reqAtualRef = React.useRef(0);
+            const slotsNecessarios = Math.ceil((servico.duracao || 1) / 0.5);
+
+            const carregarAgenda = async (dataSel) => {
+                const slots = gerarHorarios(dataSel);
+                setHorariosDisponiveis(slots);
+                setHora(""); setOcupados([]); setErroAgenda(false);
+                if (slots.length === 0) { setCarregandoAgenda(false); return; }
+                const ticket = ++reqAtualRef.current;
+                setCarregandoAgenda(true);
+                const res = await buscarHorariosOcupados(dataSel, slots);
+                if (ticket !== reqAtualRef.current) return;
+                setOcupados(res.ocupados || []);
+                setEhMock(!!res.mock);
+                setErroAgenda(!res.ok);
+                setCarregandoAgenda(false);
+            };
+
+            useEffect(() => { if (data) carregarAgenda(data); }, [data]);
+
+            const estaIndisponivel = (index, listaOcupados) => {
+                for (let i = 0; i < slotsNecessarios; i++) {
+                    const idx = index + i;
+                    if (idx >= horariosDisponiveis.length) return true;
+                    if (listaOcupados.includes(horariosDisponiveis[idx])) return true;
+                }
+                return false;
+            };
+
+            const escolherHorario = async (h, index) => {
+                if (BARBEARIA.scriptGoogleUrl) {
+                    setCarregandoAgenda(true);
+                    const res = await buscarHorariosOcupados(data, horariosDisponiveis);
+                    setCarregandoAgenda(false);
+                    if (res.ok) {
+                        setOcupados(res.ocupados);
+                        if (estaIndisponivel(index, res.ocupados)) {
+                            setHora("");
+                            alert("Esse horário acabou de ser preenchido. Escolha outro, por favor.");
+                            return;
+                        }
+                    }
+                }
+                setHora(h);
+            };
+
+            const salvar = async () => {
+                if (!nome || !whatsapp || !data || !hora) { alert("Preencha nome, WhatsApp, data e horário!"); return; }
+                if (whatsapp.length < 14) { alert("WhatsApp inválido!"); return; }
+                setLoading(true);
+                if (BARBEARIA.scriptGoogleUrl) {
+                    const res = await buscarHorariosOcupados(data, horariosDisponiveis);
+                    const idx = horariosDisponiveis.indexOf(hora);
+                    if (res.ok && (idx === -1 || estaIndisponivel(idx, res.ocupados))) {
+                        setOcupados(res.ocupados); setHora(""); setLoading(false);
+                        alert("Esse horário foi ocupado enquanto você preenchia os dados. Escolha outro.");
+                        return;
+                    }
+                }
+                const payload = {
+                    servico: servico.nome, preco: servico.preco, duracao: servico.duracao,
+                    nome, whatsapp, data, hora,
+                };
+                await salvarAgendamento(payload);
+                setLoading(false);
+                aoFinalizar(payload);
+            };
+
+            return (
+                <div className="w-full max-w-md mx-auto fade-in">
+                    <button onClick={aoVoltar} className="flex items-center gap-1 text-sm text-neutral-400 mb-3 hover:text-amber-300">
+                        <Icons.Back /> Voltar aos serviços
+                    </button>
+
+                    <div className="card rounded-2xl p-4 text-center mb-4">
+                        <p className="text-2xl">{servico.emoji}</p>
+                        <p className="serif text-lg text-neutral-100 mt-1">{servico.nome}</p>
+                        <p className="text-xs text-neutral-400 mt-1">{formatarDuracao(servico.duracao)} • <span className="text-gold font-semibold">{formatarPreco(servico)}</span></p>
+                    </div>
+
+                    <div className="card rounded-2xl p-4 space-y-3">
+                        <input type="text" className="w-full p-3 rounded-xl text-sm bg-[#1a1a1e] border border-[rgba(212,175,55,0.3)] text-neutral-100 focus:outline-none focus:border-amber-500" placeholder="Seu nome *" value={nome} onChange={(e) => setNome(e.target.value)} />
+                        <input type="tel" className="w-full p-3 rounded-xl text-sm bg-[#1a1a1e] border border-[rgba(212,175,55,0.3)] text-neutral-100 focus:outline-none focus:border-amber-500" placeholder="WhatsApp (DDD) *" maxLength="15" value={whatsapp} onChange={(e) => setWhatsapp(formatarTelefone(e.target.value))} />
+
+                        <div>
+                            <label className="block text-xs font-semibold text-neutral-400 mb-1">Escolha a data</label>
+                            <input type="date" min={hoje} value={data} onChange={(e) => { setData(e.target.value); setHora(""); }} />
+                        </div>
+
+                        {data && (
+                            <div>
+                                <div className="flex items-center justify-between mb-1">
+                                    <label className="block text-xs font-semibold text-neutral-400">Horário disponível</label>
+                                    <button type="button" onClick={() => carregarAgenda(data)} disabled={carregandoAgenda} className="text-[11px] font-bold text-gold">
+                                        {carregandoAgenda ? "atualizando..." : "↻ atualizar"}
+                                    </button>
+                                </div>
+
+                                {horariosDisponiveis.length === 0 ? (
+                                    <p className="text-xs text-red-400 font-semibold bg-red-950/40 p-2 rounded border border-red-900/40">Fechado neste dia. Escolha outra data.</p>
+                                ) : carregandoAgenda ? (
+                                    <div className="flex items-center gap-2 text-xs font-bold py-4 justify-center text-gold">
+                                        <span className="loader" style={{ width: 16, height: 16 }}></span> Verificando a agenda...
+                                    </div>
+                                ) : erroAgenda ? (
+                                    <div className="text-xs bg-red-950/40 text-red-400 font-semibold p-2 rounded border border-red-900/40">
+                                        Não consegui ler a agenda agora. Toque em "↻ atualizar".
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div className="grid grid-cols-4 gap-2">
+                                            {horariosDisponiveis.map((h, index) => {
+                                                const indisponivel = estaIndisponivel(index, ocupados);
+                                                return (
+                                                    <button key={h} disabled={indisponivel} onClick={() => escolherHorario(h, index)}
+                                                        className={`p-2 rounded-lg text-xs font-bold border transition-all ${indisponivel ? "bg-neutral-900 text-neutral-700 border-neutral-800 cursor-not-allowed" : hora === h ? "btn-gold border-transparent scale-105" : "bg-[#1a1a1e] text-neutral-300 border-[rgba(212,175,55,0.25)] hover:border-amber-500"}`}>
+                                                        {h}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                        {ehMock && (
+                                            <p className="text-[10px] text-amber-500/80 mt-2">⚠️ Agenda ainda não conectada — horários simulados (POC).</p>
+                                        )}
+                                    </>
+                                )}
+                            </div>
+                        )}
+
+                        {hora && (
+                            <button onClick={salvar} disabled={loading}
+                                className={`btn-gold w-full py-4 rounded-2xl flex items-center justify-center gap-2 ${loading ? "opacity-75" : ""}`}>
+                                {loading ? "Confirmando..." : <>AGENDAR E ENVIAR ZAP <Icons.Whatsapp /></>}
+                            </button>
+                        )}
+                    </div>
+
+                    {!BARBEARIA.scriptGoogleUrl && (
+                        <p className="text-[10px] text-neutral-600 text-center mt-3">POC — agenda ainda não conectada ao Google Agenda.</p>
+                    )}
+                </div>
+            );
+        }
+
+        // =====================================================================
+        // 8. SUCESSO
+        // =====================================================================
+        function TelaSucesso({ dados, aoVoltar }) {
+            const irWhatsapp = () => {
+                const msg = `Olá! Agendei pelo site da EC Destaque Barbershop:\n\n• Serviço: ${dados.servico}\n• Dia: ${dados.data.split("-").reverse().join("/")} às ${dados.hora}\n• Nome: ${dados.nome}\n\nPode confirmar pra mim?`;
+                const link = gerarLinkWhatsApp(BARBEARIA.whatsapp, msg);
+                if (link) window.open(link, "_blank");
+                else alert("WhatsApp da barbearia ainda é placeholder — configure em BARBEARIA.whatsapp.");
+            };
+            return (
+                <div className="w-full max-w-md mx-auto fade-in text-center card rounded-3xl p-8">
+                    <div className="w-20 h-20 rounded-full flex items-center justify-center text-4xl mb-4 mx-auto"
+                         style={{ background: "rgba(212,175,55,0.12)", border: "1px solid rgba(212,175,55,0.4)", color: "#d4af37" }}>✓</div>
+                    <h2 className="serif text-2xl text-neutral-100 mb-2">Horário reservado!</h2>
+                    <p className="text-neutral-400 text-sm mb-6">Envie a mensagem no WhatsApp para confirmar seu horário com a barbearia.</p>
+                    <div className="bg-black/40 p-4 rounded-xl mb-6 text-left border border-[rgba(212,175,55,0.2)]">
+                        <p className="text-[11px] text-gold uppercase font-bold mb-1 tracking-wider">Detalhes</p>
+                        <p className="text-neutral-100 font-semibold">{dados.servico}</p>
+                        <p className="text-neutral-400 text-sm">{dados.data.split("-").reverse().join("/")} às {dados.hora}</p>
+                        <p className="text-neutral-400 text-sm">{dados.nome}</p>
+                    </div>
+                    <button onClick={irWhatsapp} className="w-full font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-2 text-white"
+                        style={{ background: "linear-gradient(180deg,#25D366,#1da851)" }}>
+                        <Icons.Whatsapp /> Enviar no WhatsApp
+                    </button>
+                    <button onClick={aoVoltar} className="mt-5 text-neutral-500 text-xs underline hover:text-neutral-300">Voltar ao início</button>
+                </div>
+            );
+        }
+
+        // =====================================================================
+        // 9. APP
+        // =====================================================================
+        function App() {
+            const [tela, setTela] = useState("servicos"); // servicos | agendamento | sucesso
+            const [servico, setServico] = useState(null);
+            const [dadosFinal, setDadosFinal] = useState(null);
+
+            const reset = () => { setTela("servicos"); setServico(null); setDadosFinal(null); };
+
+            return (
+                <div className="min-h-screen px-4 pb-10 flex flex-col items-center">
+                    <Cabecalho />
+                    {tela === "servicos" && (
+                        <TelaServicos aoEscolher={(s) => { setServico(s); setTela("agendamento"); window.scrollTo(0, 0); }} />
+                    )}
+                    {tela === "agendamento" && servico && (
+                        <TelaAgendamento servico={servico}
+                            aoVoltar={() => { setTela("servicos"); }}
+                            aoFinalizar={(d) => { setDadosFinal(d); setTela("sucesso"); window.scrollTo(0, 0); }} />
+                    )}
+                    {tela === "sucesso" && dadosFinal && (
+                        <TelaSucesso dados={dadosFinal} aoVoltar={reset} />
+                    )}
+
+                    <footer className="mt-10 text-center">
+                        <div className="divider mb-4" style={{ maxWidth: 200, margin: "0 auto 1rem" }}></div>
+                        <p className="serif text-xs tracking-[0.3em] text-neutral-600">EC DESTAQUE BARBERSHOP</p>
+                    </footer>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById("root"));
+        root.render(<App />);
+    </script>
+</body>
+</html>
